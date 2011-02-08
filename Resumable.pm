@@ -18,7 +18,7 @@ Exception::Resumable -- resumable exceptions for Perl.
 
 =cut
 
-$VERSION = '0.9';
+$VERSION = '0.91';
 
 require Exporter;
 @ISA = 'Exporter';
@@ -47,16 +47,10 @@ sub handle(&@)
     }
 }
 
+my $test;
 if ($] < 5.010) {
-    eval <<'EOS';
-sub raise(*@)
-{
-    my $err = shift;
-    my @c = @CATCH;
-    local @CATCH = @LAST_CATCH;
-    while (@c) {
-        my ($k, $v) = splice @c, 0, 2;
-        my $ok = (ref $k eq 'CODE')
+    $test = <<'EOS';
+              (ref $k eq 'CODE')
             ? $k->($err)
             : (ref $k eq 'Regexp')
             ? $err =~ /$k/
@@ -64,8 +58,20 @@ sub raise(*@)
             ? grep { $_ eq $err } @$k
             : (ref $k eq 'HASH')
             ? exists $k->{$err}
-            : $k eq $err;
-        }
+            : $k eq $err
+EOS
+} else {
+    $test = '$err ~~ $k';
+}
+eval q#
+sub raise(*@)
+{
+    my $err = shift;
+    my @c = @CATCH;
+    local @CATCH = @LAST_CATCH;
+    while (@c) {
+        my ($k, $v) = splice @c, 0, 2;
+        my $ok = # . $test . q#;
         return ref($v) eq 'CODE' ? $v->(@_) : $v if $ok;
     }
     die $err, @_;
@@ -78,52 +84,12 @@ sub test_raise(*)
     local @CATCH = @LAST_CATCH;
     while (@c) {
         my ($k, $v) = splice @c, 0, 2;
-        my $ok = (ref $k eq 'CODE')
-            ? $k->($err)
-            : (ref $k eq 'Regexp')
-            ? $err =~ /$k/
-            : (ref $k eq 'ARRAY')
-            ? grep { $_ eq $err } @$k
-            : (ref $k eq 'HASH')
-            ? exists $k->{$err}
-            : $k eq $err;
-        }
+        my $ok = # . $test . q#;
         return $k, $v if $ok;
     }
     return undef;
 }
-EOS
-} else {
-eval <<'EOS';
-sub raise(*@)
-{
-    my $err = shift;
-    my @c = @CATCH;
-    local @CATCH = @LAST_CATCH;
-    while (@c) {
-        my ($k, $v) = splice @c, 0, 2;
-        if ($err ~~ $k) {
-            return ref($v) eq 'CODE' ? $v->(@_) : $v;
-        }
-    }
-    die $err, @_;
-}
-
-sub test_raise(*@)
-{
-    my $err = shift;
-    my @c = @CATCH;
-    local @CATCH = @LAST_CATCH;
-    while (@c) {
-        my ($k, $v) = splice @c, 0, 2;
-        if ($err ~~ $k) {
-            return $k, $v;
-        }
-    }
-    return undef;
-}
-EOS
-}
+#;
 
 1;
 __END__
@@ -208,28 +174,28 @@ files disappears all of a sudden, and it is running interactively, it
 can ask the user to point it in the right direction.  If not, it
 should just die:
 
-sub process_file
-{
-    my $file = shift;
-    if (!-f $file) {
-        $file = raise "Missing file", $file;
+    sub process_file
+    {
+        my $file = shift;
+        if (!-f $file) {
+            $file = raise "Missing file", $file;
+        }
+        # do stuff, now that we know $file is valid
     }
-    # do stuff, now that we know $file is valid
-}
-
-sub get_a_file
-{
-    print "Use what for $_[0]? "; chomp(my $f = <STDIN>);
-    $f = raise "Missing file", $f unless -f $f;
-    $f;
-}
-
-sub main
-{
-    handle {
-        # stuff that calls process_file
-    } is_interactive() ? ('Missing file' => \&get_a_file) : ();
-}
+    
+    sub get_a_file
+    {
+        print "Use what for $_[0]? "; chomp(my $f = <STDIN>);
+        $f = raise "Missing file", $f unless -f $f;
+        $f;
+    }
+    
+    sub main
+    {
+        handle {
+            # stuff that calls process_file
+        } is_interactive() ? ('Missing file' => \&get_a_file) : ();
+    }
 
 =head1 SEE ALSO
 
@@ -251,7 +217,7 @@ Bug reports welcome, patches even more welcome.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2007-2010 Sean O'Rourke.  All rights reserved, some
+Copyright (C) 2007-2011 Sean O'Rourke.  All rights reserved, some
 wrongs reversed.  This module is distributed under the same terms as
 Perl itself.
 

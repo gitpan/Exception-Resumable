@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Exception-Resumable
-version:            0.9
+version:            0.91
 abstract:           Resumable exceptions for Perl.
 author:
     - Sean O'Rourke <seano@cpan.org>
